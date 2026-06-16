@@ -130,3 +130,10 @@
 - [x] Add analytics: total businesses, approved count, pending count
 - [x] Implement role-based access control (admin only)
 - [x] Add export functionality (CSV/JSON)
+
+## Business Details - Test Message Feature
+- [x] Add test message button to business details page
+- [x] Create test message dialog/modal with phone number and message input
+- [x] Implement send test message functionality via tRPC
+- [x] Display success/failure feedback for test message
+- [x] Show message delivery status

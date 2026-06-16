@@ -125,19 +125,31 @@ export class MetaApiService {
   async sendTestMessage(
     phoneNumberId: string,
     recipientPhone: string,
-    accessToken: string
+    accessToken: string,
+    messageText?: string
   ): Promise<{ success: boolean; messageId?: string }> {
     try {
+      const payload = messageText
+        ? {
+            messaging_product: "whatsapp",
+            to: recipientPhone,
+            type: "text",
+            text: {
+              body: messageText,
+            },
+          }
+        : {
+            messaging_product: "whatsapp",
+            to: recipientPhone,
+            type: "template",
+            template: {
+              name: "hello_world",
+            },
+          };
+
       const response = await axios.post(
         `${META_GRAPH_API_BASE}/${META_API_VERSION}/${phoneNumberId}/messages`,
-        {
-          messaging_product: "whatsapp",
-          to: recipientPhone,
-          type: "template",
-          template: {
-            name: "hello_world",
-          },
-        },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,

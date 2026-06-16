@@ -1,8 +1,18 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Copy, Trash2, Bell } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, ArrowLeft, Copy, Trash2, Send } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -29,6 +39,11 @@ export default function AdminBusinessDetail() {
 
   const businessQuery = trpc.admin.getBusinessDetails.useQuery({ wabaId });
   const disconnectMutation = trpc.admin.disconnectBusiness.useMutation();
+  const sendTestMessageMutation = trpc.admin.sendTestMessage.useMutation();
+
+  const [showTestMessageDialog, setShowTestMessageDialog] = useState(false);
+  const [testPhoneNumber, setTestPhoneNumber] = useState("");
+  const [testMessage, setTestMessage] = useState("Hello! This is a test message from WhatsApp Business.");
 
   const handleDisconnect = async () => {
     if (!confirm("Are you sure you want to disconnect this business? This action cannot be undone.")) {
@@ -49,6 +64,34 @@ export default function AdminBusinessDetail() {
     const webhookUrl = `${window.location.origin}/api/webhooks/whatsapp/${wabaId}`;
     navigator.clipboard.writeText(webhookUrl);
     toast.success("Webhook URL copied to clipboard");
+  };
+
+  const handleSendTestMessage = async () => {
+    if (!testPhoneNumber.trim()) {
+      toast.error("Please enter a phone number");
+      return;
+    }
+
+    if (!testMessage.trim()) {
+      toast.error("Please enter a message");
+      return;
+    }
+
+    try {
+      await sendTestMessageMutation.mutateAsync({
+        wabaId,
+        phoneNumber: testPhoneNumber,
+        message: testMessage,
+      });
+
+      toast.success("Test message sent successfully!");
+      setShowTestMessageDialog(false);
+      setTestPhoneNumber("");
+      setTestMessage("Hello! This is a test message from WhatsApp Business.");
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Failed to send test message";
+      toast.error(errorMsg);
+    }
   };
 
   const business = businessQuery.data;
@@ -144,6 +187,94 @@ export default function AdminBusinessDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Test Message Section */}
+            <Card className="border-0 shadow-lg bg-blue-50">
+              <CardHeader>
+                <CardTitle className="text-blue-900">Test Connection</CardTitle>
+                <CardDescription className="text-blue-800">
+                  Send a test WhatsApp message to verify the connection is working
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={() => setShowTestMessageDialog(true)}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Test Message
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Test Message Dialog */}
+            <Dialog open={showTestMessageDialog} onOpenChange={setShowTestMessageDialog}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Send Test Message</DialogTitle>
+                  <DialogDescription>
+                    Verify the connection by sending a test WhatsApp message
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 mb-2 block">
+                      Recipient Phone Number
+                    </label>
+                    <Input
+                      placeholder="+1234567890"
+                      value={testPhoneNumber}
+                      onChange={(e) => setTestPhoneNumber(e.target.value)}
+                      disabled={sendTestMessageMutation.isPending}
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Include country code (e.g., +1 for USA)
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 mb-2 block">
+                      Message
+                    </label>
+                    <Textarea
+                      placeholder="Enter your test message..."
+                      value={testMessage}
+                      onChange={(e) => setTestMessage(e.target.value)}
+                      disabled={sendTestMessageMutation.isPending}
+                      rows={4}
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      {testMessage.length}/1024 characters
+                    </p>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowTestMessageDialog(false)}
+                      disabled={sendTestMessageMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleSendTestMessage}
+                      disabled={sendTestMessageMutation.isPending}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {sendTestMessageMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="mr-2 h-4 w-4" />
+                          Send
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Webhook Configuration */}
             {business.webhook && (

@@ -225,6 +225,71 @@ export const adminRouter = router({
     }),
 
   /**
+   * Send a test WhatsApp message to verify connection
+   */
+  sendTestMessage: protectedProcedure
+    .input(
+      z.object({
+        wabaId: z.string(),
+        phoneNumber: z.string(),
+        message: z.string().min(1).max(1024),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only admins can send test messages",
+        });
+      }
+
+      try {
+        // Get the WABA account to verify it exists and is active
+        const waba = await db.getWabaAccountByWabaId(input.wabaId);
+        if (!waba) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Business not found",
+          });
+        }
+
+        if (!waba.isActive) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Business account is not active",
+          });
+        }
+
+        // Use Meta API service to send test message
+        const { MetaApiService } = await import("./metaApiService");
+        const metaService = new MetaApiService(
+          process.env.META_APP_ID || "",
+          process.env.META_APP_SECRET || ""
+        );
+
+        const result = await metaService.sendTestMessage(
+          waba.phoneNumberId,
+          input.phoneNumber,
+          waba.accessToken,
+          input.message
+        );
+
+        return {
+          success: result.success,
+          messageId: result.messageId,
+          message: "Test message sent successfully",
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        const errorMsg = error instanceof Error ? error.message : "Failed to send test message";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: errorMsg,
+        });
+      }
+    }),
+
+  /**
    * Export businesses list as JSON
    */
   exportBusinesses: protectedProcedure
