@@ -1,6 +1,18 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import {
+  InsertUser,
+  users,
+  InsertWabaAccount,
+  WabaAccount,
+  wabaAccounts,
+  InsertBusinessProfile,
+  BusinessProfile,
+  businessProfiles,
+  InsertWebhookConfiguration,
+  WebhookConfiguration,
+  webhookConfigurations,
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -87,6 +99,178 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+// WhatsApp WABA Account queries
+export async function createWabaAccount(data: InsertWabaAccount): Promise<WabaAccount | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const result = await db.insert(wabaAccounts).values(data);
+    const inserted = await db
+      .select()
+      .from(wabaAccounts)
+      .where(eq(wabaAccounts.wabaId, data.wabaId))
+      .limit(1);
+    return inserted.length > 0 ? inserted[0] : null;
+  } catch (error) {
+    console.error("[Database] Failed to create WABA account:", error);
+    throw error;
+  }
+}
+
+export async function getWabaAccountByWabaId(wabaId: string): Promise<WabaAccount | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select()
+    .from(wabaAccounts)
+    .where(eq(wabaAccounts.wabaId, wabaId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getWabaAccountsByUserId(userId: number): Promise<WabaAccount[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(wabaAccounts).where(eq(wabaAccounts.userId, userId));
+}
+
+export async function updateWabaAccount(
+  wabaId: string,
+  updates: Partial<InsertWabaAccount>
+): Promise<WabaAccount | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    await db
+      .update(wabaAccounts)
+      .set(updates)
+      .where(eq(wabaAccounts.wabaId, wabaId));
+
+    return getWabaAccountByWabaId(wabaId);
+  } catch (error) {
+    console.error("[Database] Failed to update WABA account:", error);
+    throw error;
+  }
+}
+
+// Business Profile queries
+export async function createBusinessProfile(
+  data: InsertBusinessProfile
+): Promise<BusinessProfile | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const result = await db.insert(businessProfiles).values(data);
+    const inserted = await db
+      .select()
+      .from(businessProfiles)
+      .where(eq(businessProfiles.userId, data.userId))
+      .orderBy((t) => t.createdAt)
+      .limit(1);
+    return inserted.length > 0 ? inserted[0] : null;
+  } catch (error) {
+    console.error("[Database] Failed to create business profile:", error);
+    throw error;
+  }
+}
+
+export async function getBusinessProfileByUserId(
+  userId: number
+): Promise<BusinessProfile | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select()
+    .from(businessProfiles)
+    .where(eq(businessProfiles.userId, userId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updateBusinessProfile(
+  userId: number,
+  updates: Partial<InsertBusinessProfile>
+): Promise<BusinessProfile | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    await db
+      .update(businessProfiles)
+      .set(updates)
+      .where(eq(businessProfiles.userId, userId));
+
+    return getBusinessProfileByUserId(userId);
+  } catch (error) {
+    console.error("[Database] Failed to update business profile:", error);
+    throw error;
+  }
+}
+
+// Webhook Configuration queries
+export async function createWebhookConfiguration(
+  data: InsertWebhookConfiguration
+): Promise<WebhookConfiguration | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const result = await db.insert(webhookConfigurations).values(data);
+    const inserted = await db
+      .select()
+      .from(webhookConfigurations)
+      .where(eq(webhookConfigurations.wabaId, data.wabaId))
+      .limit(1);
+    return inserted.length > 0 ? inserted[0] : null;
+  } catch (error) {
+    console.error("[Database] Failed to create webhook configuration:", error);
+    throw error;
+  }
+}
+
+export async function getWebhookConfigurationByWabaId(
+  wabaId: string
+): Promise<WebhookConfiguration | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select()
+    .from(webhookConfigurations)
+    .where(eq(webhookConfigurations.wabaId, wabaId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updateWebhookConfiguration(
+  wabaId: string,
+  updates: Partial<InsertWebhookConfiguration>
+): Promise<WebhookConfiguration | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    await db
+      .update(webhookConfigurations)
+      .set(updates)
+      .where(eq(webhookConfigurations.wabaId, wabaId));
+
+    return getWebhookConfigurationByWabaId(wabaId);
+  } catch (error) {
+    console.error("[Database] Failed to update webhook configuration:", error);
+    throw error;
+  }
 }
 
 // TODO: add feature queries here as your schema grows.
