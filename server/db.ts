@@ -140,6 +140,18 @@ export async function getWabaAccountsByUserId(userId: number): Promise<WabaAccou
   return db.select().from(wabaAccounts).where(eq(wabaAccounts.userId, userId));
 }
 
+export async function getAllWabaAccounts(): Promise<WabaAccount[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    return await db.select().from(wabaAccounts);
+  } catch (error) {
+    console.error("[Database] Failed to fetch all WABA accounts:", error);
+    return [];
+  }
+}
+
 export async function updateWabaAccount(
   wabaId: string,
   updates: Partial<InsertWabaAccount>

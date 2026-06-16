@@ -116,3 +116,17 @@
 
 ## Completed Items
 (Items will be moved here as they are completed)
+
+## Admin Dashboard
+- [x] Create admin-only tRPC procedures for business list retrieval
+- [x] Build admin dashboard page with business list table
+- [x] Implement filtering by approval status (Fully Approved / Pending Review)
+- [x] Add sorting by connection date, business name, phone number
+- [x] Display business details: name, phone number, website, WABA ID, status, connection date
+- [x] Add search functionality for business name or phone number
+- [x] Implement pagination for large business lists
+- [x] Add action buttons: view details, resend notification, disconnect account
+- [x] Create business detail modal/page with full information
+- [x] Add analytics: total businesses, approved count, pending count
+- [x] Implement role-based access control (admin only)
+- [x] Add export functionality (CSV/JSON)
