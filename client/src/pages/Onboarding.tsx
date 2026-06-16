@@ -2,18 +2,35 @@ import { useState } from "react";
 import { PreFlightValidator } from "@/components/PreFlightValidator";
 import { MetaEmbeddedSignup } from "@/components/MetaEmbeddedSignup";
 import { ProgressTracker, type ProgressStep } from "@/components/ProgressTracker";
+import { ShadowModeDashboard } from "@/components/ShadowModeDashboard";
+import { ConnectionStatusDashboard } from "@/components/ConnectionStatusDashboard";
+import { trpc } from "@/lib/trpc";
 
-type OnboardingStep = "preflight" | "connect" | "processing" | "complete";
+type OnboardingStep = "preflight" | "connect" | "processing" | "complete" | "dashboard";
+
+interface WABAConnectionData {
+  wabaId: string;
+  phoneNumberId: string;
+  accessToken: string;
+  phoneNumber: string;
+  displayNameStatus: string;
+  websiteUrl: string;
+  businessName: string;
+}
 
 export default function Onboarding() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("preflight");
   const [validatedUrl, setValidatedUrl] = useState<string>("");
+  const [connectionData, setConnectionData] = useState<WABAConnectionData | null>(null);
   const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([
     { label: "Securing tokens", status: "pending" },
     { label: "Configuring gateway", status: "pending" },
     { label: "Setting up inbox", status: "pending" },
     { label: "Verifying connection", status: "pending" },
   ]);
+
+  const exchangeCodeMutation = trpc.whatsapp.exchangeCodeForToken.useMutation();
+  const registerWebhookMutation = trpc.whatsapp.registerWebhook.useMutation();
 
   const handleValidationSuccess = (url: string) => {
     setValidatedUrl(url);
@@ -24,67 +41,79 @@ export default function Onboarding() {
     console.error("Validation errors:", errors);
   };
 
-  const handleMetaSuccess = (code: string) => {
+  const handleMetaSuccess = async (code: string) => {
     console.log("Meta connection successful, code:", code);
     setCurrentStep("processing");
-    // Simulate the processing steps
-    simulateProcessing();
+
+    try {
+      // Step 1: Exchange code for token
+      setProgressSteps((prev) =>
+        prev.map((s, i) => (i === 0 ? { ...s, status: "loading" } : s))
+      );
+
+      const exchangeResult = await exchangeCodeMutation.mutateAsync({
+        code,
+        redirectUri: window.location.origin + "/onboarding",
+        websiteUrl: validatedUrl,
+        businessName: "Your Business", // TODO: Get from form
+        phoneNumber: "+1234567890", // TODO: Get from Meta popup
+      });
+
+      setProgressSteps((prev) =>
+        prev.map((s, i) =>
+          i === 0 ? { ...s, status: "complete" } : i === 1 ? { ...s, status: "loading" } : s
+        )
+      );
+
+      // Step 2: Register webhook
+      const webhookUrl = `${window.location.origin}/api/webhooks/whatsapp/${exchangeResult.wabaId}`;
+      await registerWebhookMutation.mutateAsync({
+        wabaId: exchangeResult.wabaId,
+        webhookUrl,
+        accessToken: exchangeResult.accessToken || "",
+      });
+
+      setProgressSteps((prev) =>
+        prev.map((s, i) =>
+          i <= 1 ? { ...s, status: "complete" } : i === 2 ? { ...s, status: "loading" } : s
+        )
+      );
+
+      // Step 3: Setup inbox (simulated)
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      setProgressSteps((prev) =>
+        prev.map((s, i) =>
+          i <= 2 ? { ...s, status: "complete" } : i === 3 ? { ...s, status: "loading" } : s
+        )
+      );
+
+      // Step 4: Verify connection (simulated)
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      setProgressSteps((prev) => prev.map((s) => ({ ...s, status: "complete" })));
+
+      // Store connection data and move to dashboard
+      setConnectionData({
+        wabaId: exchangeResult.wabaId,
+        phoneNumberId: exchangeResult.phoneNumberId,
+        accessToken: exchangeResult.accessToken || "",
+        phoneNumber: "+1234567890", // TODO: Get from Meta
+        displayNameStatus: exchangeResult.displayNameStatus,
+        websiteUrl: validatedUrl,
+        businessName: "Your Business", // TODO: Get from form
+      });
+
+      setTimeout(() => {
+        setCurrentStep("dashboard");
+      }, 2000);
+    } catch (error) {
+      console.error("Onboarding error:", error);
+      setProgressSteps((prev) => prev.map((s) => ({ ...s, status: "error" })));
+      handleMetaError(error instanceof Error ? error.message : "Onboarding failed");
+    }
   };
 
   const handleMetaError = (error: string) => {
     console.error("Meta connection error:", error);
-  };
-
-  const simulateProcessing = () => {
-    // Simulate step 1: Securing tokens
-    setTimeout(() => {
-      setProgressSteps((prev) =>
-        prev.map((step, idx) =>
-          idx === 0 ? { ...step, status: "loading" } : step
-        )
-      );
-    }, 500);
-
-    // Complete step 1, start step 2
-    setTimeout(() => {
-      setProgressSteps((prev) =>
-        prev.map((step, idx) => {
-          if (idx === 0) return { ...step, status: "complete" };
-          if (idx === 1) return { ...step, status: "loading" };
-          return step;
-        })
-      );
-    }, 2000);
-
-    // Complete step 2, start step 3
-    setTimeout(() => {
-      setProgressSteps((prev) =>
-        prev.map((step, idx) => {
-          if (idx <= 1) return { ...step, status: "complete" };
-          if (idx === 2) return { ...step, status: "loading" };
-          return step;
-        })
-      );
-    }, 4000);
-
-    // Complete step 3, start step 4
-    setTimeout(() => {
-      setProgressSteps((prev) =>
-        prev.map((step, idx) => {
-          if (idx <= 2) return { ...step, status: "complete" };
-          if (idx === 3) return { ...step, status: "loading" };
-          return step;
-        })
-      );
-    }, 6000);
-
-    // Complete all steps
-    setTimeout(() => {
-      setProgressSteps((prev) =>
-        prev.map((step) => ({ ...step, status: "complete" }))
-      );
-      setCurrentStep("complete");
-    }, 8000);
   };
 
   return (
@@ -102,11 +131,15 @@ export default function Onboarding() {
 
         {/* Step Indicator */}
         <div className="flex justify-center gap-2 mb-12">
-          {["preflight", "connect", "processing", "complete"].map((step, idx) => (
+          {["preflight", "connect", "processing", "dashboard"].map((step, idx) => (
             <div
               key={step}
               className={`h-2 flex-1 max-w-xs rounded-full transition-all ${
-                currentStep === step || (idx < ["preflight", "connect", "processing", "complete"].indexOf(currentStep))
+                currentStep === step ||
+                (idx <
+                  ["preflight", "connect", "processing", "dashboard"].indexOf(
+                    currentStep
+                  ))
                   ? "bg-emerald-600"
                   : "bg-slate-200"
               }`}
@@ -133,7 +166,9 @@ export default function Onboarding() {
           {currentStep === "processing" && (
             <ProgressTracker
               steps={progressSteps}
-              currentStep={progressSteps.findIndex((s) => s.status === "loading" || s.status === "pending")}
+              currentStep={progressSteps.findIndex(
+                (s) => s.status === "loading" || s.status === "pending"
+              )}
               title="Setting up your WhatsApp Business Account"
               description="This usually takes less than 30 seconds"
             />
@@ -143,13 +178,48 @@ export default function Onboarding() {
             <div className="text-center space-y-6">
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-8">
                 <div className="text-6xl mb-4">🎉</div>
-                <h2 className="text-3xl font-bold text-emerald-900 mb-2">You're All Set!</h2>
+                <h2 className="text-3xl font-bold text-emerald-900 mb-2">
+                  You're All Set!
+                </h2>
                 <p className="text-emerald-700 mb-6">
-                  Your WhatsApp Business Account has been successfully connected and configured.
+                  Your WhatsApp Business Account has been successfully connected and
+                  configured.
                 </p>
-                <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors">
+                <button
+                  onClick={() => setCurrentStep("dashboard")}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors"
+                >
                   Go to Dashboard
                 </button>
+              </div>
+            </div>
+          )}
+
+          {currentStep === "dashboard" && connectionData && (
+            <div className="space-y-8">
+              <ConnectionStatusDashboard
+                wabaId={connectionData.wabaId}
+                phoneNumberId={connectionData.phoneNumberId}
+                phoneNumber={connectionData.phoneNumber}
+                accessToken={connectionData.accessToken}
+                webhookUrl={`${window.location.origin}/api/webhooks/whatsapp/${connectionData.wabaId}`}
+                onNavigateToShadowMode={() => {
+                  // Scroll to shadow mode section
+                  document.getElementById("shadow-mode")?.scrollIntoView({
+                    behavior: "smooth",
+                  });
+                }}
+              />
+
+              <div id="shadow-mode">
+                <h2 className="text-2xl font-bold text-slate-900 mb-4">Test Your Connection</h2>
+                <ShadowModeDashboard
+                  wabaId={connectionData.wabaId}
+                  phoneNumberId={connectionData.phoneNumberId}
+                  accessToken={connectionData.accessToken}
+                  phoneNumber={connectionData.phoneNumber}
+                  displayNameStatus={connectionData.displayNameStatus}
+                />
               </div>
             </div>
           )}
@@ -157,7 +227,12 @@ export default function Onboarding() {
 
         {/* Footer */}
         <div className="text-center mt-12 text-sm text-slate-600">
-          <p>Need help? <a href="#" className="text-emerald-600 hover:text-emerald-700 font-medium">Contact our support team</a></p>
+          <p>
+            Need help?{" "}
+            <a href="#" className="text-emerald-600 hover:text-emerald-700 font-medium">
+              Contact our support team
+            </a>
+          </p>
         </div>
       </div>
     </div>

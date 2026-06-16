@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { validateWebsite } from "./services/preFlightValidator";
+import { whatsappRouter } from "./services/whatsappRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -27,13 +28,7 @@ export const appRouter = router({
       }),
   }),
 
-  whatsapp: router({
-    // TODO: Add WhatsApp connection procedures here
-    // - exchangeCodeForToken
-    // - registerWebhook
-    // - sendTestMessage
-    // - getConnectionStatus
-  }),
+  whatsapp: whatsappRouter,
 
   // TODO: add feature routers here, e.g.
   // todo: router({
