@@ -205,7 +205,7 @@ export function ShadowModeDashboard({
                 className="gap-2"
               >
                 <Copy className="h-4 w-4" />
-                Copy URL
+                Copy Webhook URL
               </Button>
             </div>
           </div>
