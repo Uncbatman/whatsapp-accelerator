@@ -14,6 +14,7 @@ import {
   webhookConfigurations,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+const { encrypt } = require('../encryption');
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -107,7 +108,11 @@ export async function createWabaAccount(data: InsertWabaAccount): Promise<WabaAc
   if (!db) return null;
 
   try {
-    const result = await db.insert(wabaAccounts).values(data);
+    const persistedData = {
+      ...data,
+      accessToken: encrypt(data.accessToken),
+    };
+    const result = await db.insert(wabaAccounts).values(persistedData);
     const inserted = await db
       .select()
       .from(wabaAccounts)
@@ -140,6 +145,17 @@ export async function getWabaAccountsByUserId(userId: number): Promise<WabaAccou
   return db.select().from(wabaAccounts).where(eq(wabaAccounts.userId, userId));
 }
 
+export async function saveAccessToken(userId: number, rawToken: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const encryptedToken = encrypt(rawToken);
+  await db
+    .update(wabaAccounts)
+    .set({ accessToken: encryptedToken })
+    .where(eq(wabaAccounts.userId, userId));
+}
+
 export async function getAllWabaAccounts(): Promise<WabaAccount[]> {
   const db = await getDb();
   if (!db) return [];
@@ -160,9 +176,12 @@ export async function updateWabaAccount(
   if (!db) return null;
 
   try {
+    const persistedUpdates = updates.accessToken
+      ? { ...updates, accessToken: encrypt(updates.accessToken) }
+      : updates;
     await db
       .update(wabaAccounts)
-      .set(updates)
+      .set(persistedUpdates)
       .where(eq(wabaAccounts.wabaId, wabaId));
 
     return getWabaAccountByWabaId(wabaId);
