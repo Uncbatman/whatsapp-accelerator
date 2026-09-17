@@ -1,179 +1,147 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
+import { protectedProcedure, router } from "../_core/trpc";
 import { metaApiService } from "./metaApiService";
 import { notifyOwnerOfNewOnboarding } from "./notificationService";
 import * as db from "../db";
+import { randomBytes } from "node:crypto";
+
+async function ownedAccount(userId: number, wabaId: string) {
+  const account = await db.getWabaAccountByWabaId(wabaId);
+  if (!account)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "WABA account not found",
+    });
+  if (account.userId !== userId)
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You do not own this WABA account",
+    });
+  return account;
+}
 
 export const whatsappRouter = router({
-  /**
-   * Exchange Meta authorization code for access token and set up WABA
-   */
-  exchangeCodeForToken: publicProcedure
+  exchangeCodeForToken: protectedProcedure
     .input(
       z.object({
-        code: z.string(),
+        code: z.string().min(1),
         redirectUri: z.string().url(),
         websiteUrl: z.string().url(),
-        businessName: z.string(),
-        phoneNumber: z.string(),
+        businessName: z.string().trim().min(1).max(255),
       })
     )
-    .mutation(async ({ input }) => {
-      try {
-        // Step 1: Exchange code for token
-        const tokenResponse = await metaApiService.exchangeCodeForToken(input.code, input.redirectUri);
-
-        // Step 2: Get WABA info
-        const wabaInfo = await metaApiService.getWABAInfo(tokenResponse.access_token);
-
-        // Step 3: Save to database (using system user ID 1 for now)
-        const wabaAccount = await db.createWabaAccount({
-          userId: 1, // System user - in production, use ctx.user.id
-          wabaId: wabaInfo.id,
-          phoneNumberId: wabaInfo.phone_number_id,
-          phoneNumber: input.phoneNumber,
-          businessName: input.businessName,
-          websiteUrl: input.websiteUrl,
-          accessToken: tokenResponse.access_token,
-          displayNameStatus: "pending",
-          webhookUrl: null,
-          webhookVerifyToken: null,
-          isActive: 1,
+    .mutation(async ({ ctx, input }) => {
+      const tokenResponse = await metaApiService.exchangeCodeForToken(
+        input.code,
+        input.redirectUri
+      );
+      const wabaInfo = await metaApiService.getWABAInfo(
+        tokenResponse.access_token
+      );
+      const wabaAccount = await db.createWabaAccount({
+        userId: ctx.user.id,
+        wabaId: wabaInfo.id,
+        phoneNumberId: wabaInfo.phone_number_id,
+        phoneNumber: wabaInfo.display_phone_number,
+        businessName: input.businessName,
+        websiteUrl: input.websiteUrl,
+        accessToken: tokenResponse.access_token,
+        displayNameStatus:
+          wabaInfo.display_name_status === "APPROVED" ? "approved" : "pending",
+        webhookUrl: null,
+        webhookVerifyToken: null,
+        isActive: 1,
+      });
+      if (!wabaAccount)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to save WABA account",
         });
-
-        if (!wabaAccount) {
-          throw new Error("Failed to save WABA account");
-        }
-
-        // Notify owner of new onboarding
-        await notifyOwnerOfNewOnboarding({
-          businessName: input.businessName,
-          phoneNumber: input.phoneNumber,
-          wabaId: wabaAccount.wabaId,
-          websiteUrl: input.websiteUrl,
-          connectedAt: new Date(),
-        });
-
-        return {
-          success: true,
-          wabaId: wabaAccount.wabaId,
-          phoneNumberId: wabaAccount.phoneNumberId,
-          displayNameStatus: wabaAccount.displayNameStatus,
-          accessToken: wabaAccount.accessToken,
-        };
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : "Token exchange failed";
-        throw new Error(errorMsg);
-      }
+      await notifyOwnerOfNewOnboarding({
+        businessName: input.businessName,
+        phoneNumber: wabaInfo.display_phone_number,
+        wabaId: wabaAccount.wabaId,
+        websiteUrl: input.websiteUrl,
+        connectedAt: new Date(),
+      });
+      return {
+        success: true,
+        wabaId: wabaAccount.wabaId,
+        phoneNumberId: wabaAccount.phoneNumberId,
+        phoneNumber: wabaAccount.phoneNumber,
+        businessName: wabaAccount.businessName,
+        displayNameStatus: wabaAccount.displayNameStatus,
+      };
     }),
 
-  /**
-   * Register webhook URL with Meta for incoming messages
-   */
-  registerWebhook: publicProcedure
+  registerWebhook: protectedProcedure
+    .input(
+      z.object({ wabaId: z.string().min(1), webhookUrl: z.string().url() })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const account = await ownedAccount(ctx.user.id, input.wabaId);
+      const verifyToken = randomBytes(32).toString("hex");
+      await metaApiService.registerWebhook(
+        account.wabaId,
+        input.webhookUrl,
+        account.accessToken
+      );
+      await db.createWebhookConfiguration({
+        wabaId: account.wabaId,
+        webhookUrl: input.webhookUrl,
+        verifyToken,
+        isVerified: 0,
+      });
+      await db.updateWabaAccount(account.wabaId, {
+        webhookUrl: input.webhookUrl,
+        webhookVerifyToken: verifyToken,
+      });
+      return { success: true };
+    }),
+
+  sendTestMessage: protectedProcedure
     .input(
       z.object({
-        wabaId: z.string(),
-        webhookUrl: z.string().url(),
-        accessToken: z.string(),
+        wabaId: z.string().min(1),
+        recipientPhone: z.string().regex(/^\+?[1-9]\d{7,14}$/),
+        message: z.string().trim().min(1).max(1024).optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      try {
-        await metaApiService.registerWebhook(input.wabaId, input.webhookUrl, input.accessToken);
-
-        // Generate verify token
-        const verifyToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-
-        // Save webhook configuration
-        await db.createWebhookConfiguration({
-          wabaId: input.wabaId,
-          webhookUrl: input.webhookUrl,
-          verifyToken,
-          isVerified: 0,
-        });
-
-        return { success: true, verifyToken };
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : "Webhook registration failed";
-        throw new Error(errorMsg);
-      }
+    .mutation(async ({ ctx, input }) => {
+      const account = await ownedAccount(ctx.user.id, input.wabaId);
+      const result = await metaApiService.sendTestMessage(
+        account.phoneNumberId,
+        input.recipientPhone,
+        account.accessToken,
+        input.message
+      );
+      return { success: result.success, messageId: result.messageId };
     }),
 
-  /**
-   * Send test message to verify connection
-   */
-  sendTestMessage: publicProcedure
-    .input(
-      z.object({
-        phoneNumberId: z.string(),
-        recipientPhone: z.string(),
-        accessToken: z.string(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        const result = await metaApiService.sendTestMessage(
-          input.phoneNumberId,
-          input.recipientPhone,
-          input.accessToken
-        );
-
-        return {
-          success: result.success,
-          messageId: result.messageId,
-        };
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : "Failed to send test message";
-        throw new Error(errorMsg);
-      }
+  getConnectionStatus: protectedProcedure
+    .input(z.object({ wabaId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const account = await ownedAccount(ctx.user.id, input.wabaId);
+      const status = await metaApiService.getWABAStatus(
+        account.wabaId,
+        account.accessToken
+      );
+      return { status, isFullyApproved: status === "Fully Approved" };
     }),
 
-  /**
-   * Get WABA connection status
-   */
-  getConnectionStatus: publicProcedure
-    .input(z.object({ wabaId: z.string(), accessToken: z.string() }))
-    .query(async ({ input }) => {
-      try {
-        const status = await metaApiService.getWABAStatus(input.wabaId, input.accessToken);
-
-        return {
-          status,
-          isFullyApproved: status === "Fully Approved",
-        };
-      } catch (error) {
-        return {
-          status: "Pending Review",
-          isFullyApproved: false,
-        };
-      }
-    }),
-
-  /**
-   * Get WABA account details
-   */
-  getWABADetails: publicProcedure
-    .input(z.object({ wabaId: z.string() }))
-    .query(async ({ input }) => {
-      try {
-        const waba = await db.getWabaAccountByWabaId(input.wabaId);
-        if (!waba) {
-          throw new Error("WABA account not found");
-        }
-
-        return {
-          wabaId: waba.wabaId,
-          phoneNumberId: waba.phoneNumberId,
-          phoneNumber: waba.phoneNumber,
-          businessName: waba.businessName,
-          displayNameStatus: waba.displayNameStatus,
-          webhookUrl: waba.webhookUrl,
-          createdAt: waba.createdAt,
-        };
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : "Failed to fetch WABA details";
-        throw new Error(errorMsg);
-      }
+  getWABADetails: protectedProcedure
+    .input(z.object({ wabaId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const waba = await ownedAccount(ctx.user.id, input.wabaId);
+      return {
+        wabaId: waba.wabaId,
+        phoneNumberId: waba.phoneNumberId,
+        phoneNumber: waba.phoneNumber,
+        businessName: waba.businessName,
+        displayNameStatus: waba.displayNameStatus,
+        webhookUrl: waba.webhookUrl,
+        createdAt: waba.createdAt,
+      };
     }),
 });

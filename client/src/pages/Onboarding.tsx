@@ -1,17 +1,24 @@
 import { useState } from "react";
 import { PreFlightValidator } from "@/components/PreFlightValidator";
 import { MetaEmbeddedSignup } from "@/components/MetaEmbeddedSignup";
-import { ProgressTracker, type ProgressStep } from "@/components/ProgressTracker";
+import {
+  ProgressTracker,
+  type ProgressStep,
+} from "@/components/ProgressTracker";
 import { ShadowModeDashboard } from "@/components/ShadowModeDashboard";
 import { ConnectionStatusDashboard } from "@/components/ConnectionStatusDashboard";
 import { trpc } from "@/lib/trpc";
 
-type OnboardingStep = "preflight" | "connect" | "processing" | "complete" | "dashboard";
+type OnboardingStep =
+  | "preflight"
+  | "connect"
+  | "processing"
+  | "complete"
+  | "dashboard";
 
 interface WABAConnectionData {
   wabaId: string;
   phoneNumberId: string;
-  accessToken: string;
   phoneNumber: string;
   displayNameStatus: string;
   websiteUrl: string;
@@ -21,7 +28,8 @@ interface WABAConnectionData {
 export default function Onboarding() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("preflight");
   const [validatedUrl, setValidatedUrl] = useState<string>("");
-  const [connectionData, setConnectionData] = useState<WABAConnectionData | null>(null);
+  const [connectionData, setConnectionData] =
+    useState<WABAConnectionData | null>(null);
   const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([
     { label: "Securing tokens", status: "pending" },
     { label: "Configuring gateway", status: "pending" },
@@ -47,7 +55,7 @@ export default function Onboarding() {
 
     try {
       // Step 1: Exchange code for token
-      setProgressSteps((prev) =>
+      setProgressSteps(prev =>
         prev.map((s, i) => (i === 0 ? { ...s, status: "loading" } : s))
       );
 
@@ -55,13 +63,16 @@ export default function Onboarding() {
         code,
         redirectUri: window.location.origin + "/onboarding",
         websiteUrl: validatedUrl,
-        businessName: "Your Business", // TODO: Get from form
-        phoneNumber: "+1234567890", // TODO: Get from Meta popup
+        businessName: window.prompt("Enter your business name")?.trim() || "",
       });
 
-      setProgressSteps((prev) =>
+      setProgressSteps(prev =>
         prev.map((s, i) =>
-          i === 0 ? { ...s, status: "complete" } : i === 1 ? { ...s, status: "loading" } : s
+          i === 0
+            ? { ...s, status: "complete" }
+            : i === 1
+              ? { ...s, status: "loading" }
+              : s
         )
       );
 
@@ -70,36 +81,42 @@ export default function Onboarding() {
       await registerWebhookMutation.mutateAsync({
         wabaId: exchangeResult.wabaId,
         webhookUrl,
-        accessToken: exchangeResult.accessToken || "",
       });
 
-      setProgressSteps((prev) =>
+      setProgressSteps(prev =>
         prev.map((s, i) =>
-          i <= 1 ? { ...s, status: "complete" } : i === 2 ? { ...s, status: "loading" } : s
+          i <= 1
+            ? { ...s, status: "complete" }
+            : i === 2
+              ? { ...s, status: "loading" }
+              : s
         )
       );
 
       // Step 3: Setup inbox (simulated)
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setProgressSteps((prev) =>
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setProgressSteps(prev =>
         prev.map((s, i) =>
-          i <= 2 ? { ...s, status: "complete" } : i === 3 ? { ...s, status: "loading" } : s
+          i <= 2
+            ? { ...s, status: "complete" }
+            : i === 3
+              ? { ...s, status: "loading" }
+              : s
         )
       );
 
       // Step 4: Verify connection (simulated)
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setProgressSteps((prev) => prev.map((s) => ({ ...s, status: "complete" })));
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setProgressSteps(prev => prev.map(s => ({ ...s, status: "complete" })));
 
       // Store connection data and move to dashboard
       setConnectionData({
         wabaId: exchangeResult.wabaId,
         phoneNumberId: exchangeResult.phoneNumberId,
-        accessToken: exchangeResult.accessToken || "",
-        phoneNumber: "+1234567890", // TODO: Get from Meta
+        phoneNumber: exchangeResult.phoneNumber,
         displayNameStatus: exchangeResult.displayNameStatus,
         websiteUrl: validatedUrl,
-        businessName: "Your Business", // TODO: Get from form
+        businessName: exchangeResult.businessName || "Business",
       });
 
       setTimeout(() => {
@@ -107,8 +124,10 @@ export default function Onboarding() {
       }, 2000);
     } catch (error) {
       console.error("Onboarding error:", error);
-      setProgressSteps((prev) => prev.map((s) => ({ ...s, status: "error" })));
-      handleMetaError(error instanceof Error ? error.message : "Onboarding failed");
+      setProgressSteps(prev => prev.map(s => ({ ...s, status: "error" })));
+      handleMetaError(
+        error instanceof Error ? error.message : "Onboarding failed"
+      );
     }
   };
 
@@ -125,26 +144,29 @@ export default function Onboarding() {
             WhatsApp Business Onboarding
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            Connect your WhatsApp Business Account in minutes. We handle all the technical setup for you.
+            Connect your WhatsApp Business Account in minutes. We handle all the
+            technical setup for you.
           </p>
         </div>
 
         {/* Step Indicator */}
         <div className="flex justify-center gap-2 mb-12">
-          {["preflight", "connect", "processing", "dashboard"].map((step, idx) => (
-            <div
-              key={step}
-              className={`h-2 flex-1 max-w-xs rounded-full transition-all ${
-                currentStep === step ||
-                (idx <
-                  ["preflight", "connect", "processing", "dashboard"].indexOf(
-                    currentStep
-                  ))
-                  ? "bg-emerald-600"
-                  : "bg-slate-200"
-              }`}
-            />
-          ))}
+          {["preflight", "connect", "processing", "dashboard"].map(
+            (step, idx) => (
+              <div
+                key={step}
+                className={`h-2 flex-1 max-w-xs rounded-full transition-all ${
+                  currentStep === step ||
+                  idx <
+                    ["preflight", "connect", "processing", "dashboard"].indexOf(
+                      currentStep
+                    )
+                    ? "bg-emerald-600"
+                    : "bg-slate-200"
+                }`}
+              />
+            )
+          )}
         </div>
 
         {/* Content */}
@@ -167,7 +189,7 @@ export default function Onboarding() {
             <ProgressTracker
               steps={progressSteps}
               currentStep={progressSteps.findIndex(
-                (s) => s.status === "loading" || s.status === "pending"
+                s => s.status === "loading" || s.status === "pending"
               )}
               title="Setting up your WhatsApp Business Account"
               description="This usually takes less than 30 seconds"
@@ -182,8 +204,8 @@ export default function Onboarding() {
                   You're All Set!
                 </h2>
                 <p className="text-emerald-700 mb-6">
-                  Your WhatsApp Business Account has been successfully connected and
-                  configured.
+                  Your WhatsApp Business Account has been successfully connected
+                  and configured.
                 </p>
                 <button
                   onClick={() => setCurrentStep("dashboard")}
@@ -201,7 +223,6 @@ export default function Onboarding() {
                 wabaId={connectionData.wabaId}
                 phoneNumberId={connectionData.phoneNumberId}
                 phoneNumber={connectionData.phoneNumber}
-                accessToken={connectionData.accessToken}
                 webhookUrl={`${window.location.origin}/api/webhooks/whatsapp/${connectionData.wabaId}`}
                 onNavigateToShadowMode={() => {
                   // Scroll to shadow mode section
@@ -212,11 +233,12 @@ export default function Onboarding() {
               />
 
               <div id="shadow-mode">
-                <h2 className="text-2xl font-bold text-slate-900 mb-4">Test Your Connection</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mb-4">
+                  Test Your Connection
+                </h2>
                 <ShadowModeDashboard
                   wabaId={connectionData.wabaId}
                   phoneNumberId={connectionData.phoneNumberId}
-                  accessToken={connectionData.accessToken}
                   phoneNumber={connectionData.phoneNumber}
                   displayNameStatus={connectionData.displayNameStatus}
                 />
@@ -229,7 +251,10 @@ export default function Onboarding() {
         <div className="text-center mt-12 text-sm text-slate-600">
           <p>
             Need help?{" "}
-            <a href="#" className="text-emerald-600 hover:text-emerald-700 font-medium">
+            <a
+              href="#"
+              className="text-emerald-600 hover:text-emerald-700 font-medium"
+            >
               Contact our support team
             </a>
           </p>

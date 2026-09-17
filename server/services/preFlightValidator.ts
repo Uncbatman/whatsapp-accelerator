@@ -6,6 +6,8 @@
 
 import axios from "axios";
 import { JSDOM } from "jsdom";
+import dns from "node:dns/promises";
+import net from "node:net";
 
 export interface ValidationResult {
   url: string;
@@ -13,6 +15,48 @@ export interface ValidationResult {
   hasTermsOfService: boolean;
   isValid: boolean;
   errors: string[];
+}
+
+function isPrivateIp(address: string): boolean {
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split(".").map(Number);
+    return (
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    );
+  }
+  return (
+    net.isIPv6(address) &&
+    (address === "::1" ||
+      address.toLowerCase().startsWith("fe80:") ||
+      address.toLowerCase().startsWith("fc") ||
+      address.toLowerCase().startsWith("fd"))
+  );
+}
+
+async function validatePublicUrl(value: string): Promise<URL> {
+  const parsed = new URL(value);
+  if (!["http:", "https:"].includes(parsed.protocol))
+    throw new Error("Only HTTP and HTTPS URLs are supported.");
+  if (parsed.username || parsed.password)
+    throw new Error("URLs with embedded credentials are not allowed.");
+  const hostname = parsed.hostname.toLowerCase();
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "metadata.google.internal" ||
+    isPrivateIp(hostname)
+  )
+    throw new Error("Private or local URLs are not allowed.");
+  const addresses = net.isIP(hostname)
+    ? [hostname]
+    : (await dns.lookup(hostname, { all: true })).map(result => result.address);
+  if (addresses.some(isPrivateIp))
+    throw new Error("The URL resolves to a private or local network.");
+  return parsed;
 }
 
 /**
@@ -26,7 +70,7 @@ export async function validateWebsite(url: string): Promise<ValidationResult> {
 
   try {
     // Validate URL format
-    const urlObj = new URL(url);
+    const urlObj = await validatePublicUrl(url);
     const normalizedUrl = urlObj.toString();
 
     // Fetch the website content with timeout
@@ -34,6 +78,9 @@ export async function validateWebsite(url: string): Promise<ValidationResult> {
     try {
       const response = await axios.get(normalizedUrl, {
         timeout: 10000,
+        maxContentLength: 2 * 1024 * 1024,
+        maxBodyLength: 2 * 1024 * 1024,
+        responseType: "text",
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -44,11 +91,15 @@ export async function validateWebsite(url: string): Promise<ValidationResult> {
     } catch (fetchError) {
       if (axios.isAxiosError(fetchError)) {
         if (fetchError.code === "ECONNABORTED") {
-          errors.push("Website request timed out. Please check if the URL is accessible.");
+          errors.push(
+            "Website request timed out. Please check if the URL is accessible."
+          );
         } else if (fetchError.response?.status === 404) {
           errors.push("Website not found (404). Please verify the URL.");
         } else if (fetchError.response?.status === 403) {
-          errors.push("Access to website is forbidden (403). Please check permissions.");
+          errors.push(
+            "Access to website is forbidden (403). Please check permissions."
+          );
         } else {
           errors.push(`Failed to access website: ${fetchError.message}`);
         }
@@ -81,7 +132,7 @@ export async function validateWebsite(url: string): Promise<ValidationResult> {
         /href=["']([^"']*privacy[^"']*)["']/i,
       ];
 
-      hasPrivacyPolicy = privacyPatterns.some((pattern) => {
+      hasPrivacyPolicy = privacyPatterns.some(pattern => {
         return pattern.test(pageHtml);
       });
 
@@ -95,7 +146,7 @@ export async function validateWebsite(url: string): Promise<ValidationResult> {
         /href=["']([^"']*terms[^"']*)["']/i,
       ];
 
-      hasTermsOfService = termsPatterns.some((pattern) => {
+      hasTermsOfService = termsPatterns.some(pattern => {
         return pattern.test(pageHtml);
       });
     } catch (parseError) {
@@ -121,7 +172,8 @@ export async function validateWebsite(url: string): Promise<ValidationResult> {
       );
     }
 
-    const isValid = hasPrivacyPolicy && hasTermsOfService && errors.length === 0;
+    const isValid =
+      hasPrivacyPolicy && hasTermsOfService && errors.length === 0;
 
     return {
       url,
@@ -148,6 +200,8 @@ export async function validateWebsite(url: string): Promise<ValidationResult> {
 /**
  * Validates multiple websites in parallel.
  */
-export async function validateWebsites(urls: string[]): Promise<ValidationResult[]> {
-  return Promise.all(urls.map((url) => validateWebsite(url)));
+export async function validateWebsites(
+  urls: string[]
+): Promise<ValidationResult[]> {
+  return Promise.all(urls.map(url => validateWebsite(url)));
 }

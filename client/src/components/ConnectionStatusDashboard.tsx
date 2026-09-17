@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -18,7 +24,6 @@ interface ConnectionStatusDashboardProps {
   wabaId: string;
   phoneNumberId: string;
   phoneNumber: string;
-  accessToken: string;
   webhookUrl?: string;
   onNavigateToShadowMode?: () => void;
 }
@@ -27,14 +32,13 @@ export function ConnectionStatusDashboard({
   wabaId,
   phoneNumberId,
   phoneNumber,
-  accessToken,
   webhookUrl,
   onNavigateToShadowMode,
 }: ConnectionStatusDashboardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const statusQuery = trpc.whatsapp.getConnectionStatus.useQuery(
-    { wabaId, accessToken },
+    { wabaId },
     { refetchInterval: 30000 } // Refetch every 30 seconds
   );
 
@@ -66,7 +70,9 @@ export function ConnectionStatusDashboard({
               </div>
               <div>
                 <CardTitle>WhatsApp Business Connected</CardTitle>
-                <CardDescription>Your account is active and ready to use</CardDescription>
+                <CardDescription>
+                  Your account is active and ready to use
+                </CardDescription>
               </div>
             </div>
             <Badge
@@ -101,8 +107,12 @@ export function ConnectionStatusDashboard({
           </CardHeader>
           <CardContent>
             <div className="bg-slate-50 rounded-lg p-4">
-              <p className="text-2xl font-bold text-slate-900 font-mono">{phoneNumber}</p>
-              <p className="text-xs text-slate-600 mt-2">Phone Number ID: {phoneNumberId}</p>
+              <p className="text-2xl font-bold text-slate-900 font-mono">
+                {phoneNumber}
+              </p>
+              <p className="text-xs text-slate-600 mt-2">
+                Phone Number ID: {phoneNumberId}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -114,8 +124,12 @@ export function ConnectionStatusDashboard({
           </CardHeader>
           <CardContent>
             <div className="bg-slate-50 rounded-lg p-4">
-              <p className="text-sm font-mono text-slate-900 break-all">{wabaId}</p>
-              <p className="text-xs text-slate-600 mt-2">Unique identifier for your account</p>
+              <p className="text-sm font-mono text-slate-900 break-all">
+                {wabaId}
+              </p>
+              <p className="text-xs text-slate-600 mt-2">
+                Unique identifier for your account
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -126,7 +140,9 @@ export function ConnectionStatusDashboard({
         <Alert className="border-amber-200 bg-amber-50">
           <Clock className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-800">
-            <strong>Pending Review:</strong> Meta is reviewing your business information. This typically takes 24-48 hours. You can still send and receive messages during this time.
+            <strong>Pending Review:</strong> Meta is reviewing your business
+            information. This typically takes 24-48 hours. You can still send
+            and receive messages during this time.
           </AlertDescription>
         </Alert>
       )}
@@ -135,7 +151,8 @@ export function ConnectionStatusDashboard({
         <Alert className="border-emerald-200 bg-emerald-50">
           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
           <AlertDescription className="text-emerald-800">
-            <strong>Fully Approved:</strong> Your WhatsApp Business Account is fully approved and ready for production use.
+            <strong>Fully Approved:</strong> Your WhatsApp Business Account is
+            fully approved and ready for production use.
           </AlertDescription>
         </Alert>
       )}
@@ -149,14 +166,18 @@ export function ConnectionStatusDashboard({
               Active
             </Badge>
           </CardTitle>
-          <CardDescription>Your webhook is configured to receive incoming messages</CardDescription>
+          <CardDescription>
+            Your webhook is configured to receive incoming messages
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {webhookUrl && (
             <div className="bg-slate-50 rounded-lg p-4 space-y-3">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900 mb-2">Webhook URL</p>
+                  <p className="text-sm font-medium text-slate-900 mb-2">
+                    Webhook URL
+                  </p>
                   <p className="text-xs font-mono text-slate-600 break-all bg-white rounded p-2 border border-slate-200">
                     {webhookUrl}
                   </p>
@@ -197,7 +218,9 @@ export function ConnectionStatusDashboard({
             variant="outline"
             className="w-full justify-start"
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
             {isRefreshing ? "Refreshing..." : "Refresh Status"}
           </Button>
 
@@ -219,9 +242,27 @@ export function ConnectionStatusDashboard({
           <CardTitle className="text-base">Need Help?</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-slate-700 space-y-2">
-          <p>• Check our <a href="#" className="text-emerald-600 hover:underline">documentation</a> for API integration guides</p>
-          <p>• Contact <a href="#" className="text-emerald-600 hover:underline">support</a> if you encounter any issues</p>
-          <p>• View <a href="#" className="text-emerald-600 hover:underline">webhook logs</a> to debug message delivery</p>
+          <p>
+            • Check our{" "}
+            <a href="#" className="text-emerald-600 hover:underline">
+              documentation
+            </a>{" "}
+            for API integration guides
+          </p>
+          <p>
+            • Contact{" "}
+            <a href="#" className="text-emerald-600 hover:underline">
+              support
+            </a>{" "}
+            if you encounter any issues
+          </p>
+          <p>
+            • View{" "}
+            <a href="#" className="text-emerald-600 hover:underline">
+              webhook logs
+            </a>{" "}
+            to debug message delivery
+          </p>
         </CardContent>
       </Card>
     </div>
