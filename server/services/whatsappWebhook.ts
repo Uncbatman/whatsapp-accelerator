@@ -1,5 +1,20 @@
 import type { Request, Response } from "express";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import * as db from "../db";
+
+function isValidSignature(
+  rawBody: Buffer,
+  signature: string | undefined
+): boolean {
+  if (!signature || !process.env.META_APP_SECRET) return false;
+  const expected = `sha256=${createHmac("sha256", process.env.META_APP_SECRET).update(rawBody).digest("hex")}`;
+  const received = Buffer.from(signature);
+  const calculated = Buffer.from(expected);
+  return (
+    received.length === calculated.length &&
+    timingSafeEqual(received, calculated)
+  );
+}
 
 export async function verifyWhatsAppWebhook(req: Request, res: Response) {
   const wabaId = String(req.params.wabaId || "");
@@ -23,11 +38,13 @@ export async function receiveWhatsAppWebhook(req: Request, res: Response) {
   const wabaId = String(req.params.wabaId || "");
   const account = await db.getWabaAccountByWabaId(wabaId);
   if (!account || !account.isActive) return res.sendStatus(404);
+  const rawBody = Buffer.isBuffer(req.body)
+    ? req.body
+    : Buffer.from(JSON.stringify(req.body ?? {}));
+  if (!isValidSignature(rawBody, req.header("x-hub-signature-256")))
+    return res.sendStatus(401);
   try {
-    const raw = Buffer.isBuffer(req.body)
-      ? req.body.toString("utf8")
-      : JSON.stringify(req.body ?? {});
-    const payload = JSON.parse(raw) as {
+    const payload = JSON.parse(rawBody.toString("utf8")) as {
       object?: string;
       entry?: Array<{
         changes?: Array<{
@@ -41,12 +58,12 @@ export async function receiveWhatsAppWebhook(req: Request, res: Response) {
       for (const change of entry.changes ?? []) {
         const value = change.value;
         if (value?.messages?.length)
-          console.info("[WhatsApp] Incoming messages", {
+          console.info("[WhatsApp] Received message event", {
             wabaId,
             count: value.messages.length,
           });
         if (value?.statuses?.length)
-          console.info("[WhatsApp] Message statuses", {
+          console.info("[WhatsApp] Received status event", {
             wabaId,
             count: value.statuses.length,
           });

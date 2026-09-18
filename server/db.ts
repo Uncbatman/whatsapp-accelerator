@@ -13,10 +13,14 @@ import {
   WebhookConfiguration,
   webhookConfigurations,
 } from "../drizzle/schema";
-import { ENV } from './_core/env';
-const { encrypt } = require('../encryption');
+import { ENV } from "./_core/env";
+import { decrypt, encrypt } from "../encryption";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+
+function withDecryptedToken(account: WabaAccount): WabaAccount {
+  return { ...account, accessToken: decrypt(account.accessToken) };
+}
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
@@ -69,8 +73,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
@@ -97,13 +101,19 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
 
 // WhatsApp WABA Account queries
-export async function createWabaAccount(data: InsertWabaAccount): Promise<WabaAccount | null> {
+export async function createWabaAccount(
+  data: InsertWabaAccount
+): Promise<WabaAccount | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -118,14 +128,16 @@ export async function createWabaAccount(data: InsertWabaAccount): Promise<WabaAc
       .from(wabaAccounts)
       .where(eq(wabaAccounts.wabaId, data.wabaId))
       .limit(1);
-    return inserted.length > 0 ? inserted[0] : null;
+    return inserted.length > 0 ? withDecryptedToken(inserted[0]) : null;
   } catch (error) {
     console.error("[Database] Failed to create WABA account:", error);
     throw error;
   }
 }
 
-export async function getWabaAccountByWabaId(wabaId: string): Promise<WabaAccount | null> {
+export async function getWabaAccountByWabaId(
+  wabaId: string
+): Promise<WabaAccount | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -135,17 +147,22 @@ export async function getWabaAccountByWabaId(wabaId: string): Promise<WabaAccoun
     .where(eq(wabaAccounts.wabaId, wabaId))
     .limit(1);
 
-  return result.length > 0 ? result[0] : null;
+  return result.length > 0 ? withDecryptedToken(result[0]) : null;
 }
 
-export async function getWabaAccountsByUserId(userId: number): Promise<WabaAccount[]> {
+export async function getWabaAccountsByUserId(
+  userId: number
+): Promise<WabaAccount[]> {
   const db = await getDb();
   if (!db) return [];
 
   return db.select().from(wabaAccounts).where(eq(wabaAccounts.userId, userId));
 }
 
-export async function saveAccessToken(userId: number, rawToken: string): Promise<void> {
+export async function saveAccessToken(
+  userId: number,
+  rawToken: string
+): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
@@ -204,7 +221,7 @@ export async function createBusinessProfile(
       .select()
       .from(businessProfiles)
       .where(eq(businessProfiles.userId, data.userId))
-      .orderBy((t) => t.createdAt)
+      .orderBy(t => t.createdAt)
       .limit(1);
     return inserted.length > 0 ? inserted[0] : null;
   } catch (error) {

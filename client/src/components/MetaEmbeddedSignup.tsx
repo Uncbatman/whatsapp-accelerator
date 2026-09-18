@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MessageCircle, AlertCircle, Loader2 } from "lucide-react";
 
-const META_APP_ID = "929745616498292";
+const META_APP_ID = import.meta.env.VITE_META_APP_ID || "929745616498292";
+const META_API_VERSION = import.meta.env.VITE_META_API_VERSION || "v21.0";
 
 interface MetaEmbeddedSignupProps {
   onSuccess: (code: string) => void;
@@ -22,11 +29,14 @@ declare global {
 type FacebookResponse = {
   authResponse?: {
     code?: string;
-    accessToken?: string;
   };
 };
 
-export function MetaEmbeddedSignup({ onSuccess, onError, isLoading }: MetaEmbeddedSignupProps) {
+export function MetaEmbeddedSignup({
+  onSuccess,
+  onError,
+  isLoading,
+}: MetaEmbeddedSignupProps) {
   const [fbReady, setFbReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -38,7 +48,7 @@ export function MetaEmbeddedSignup({ onSuccess, onError, isLoading }: MetaEmbedd
         window.FB.init({
           appId: META_APP_ID,
           xfbml: false,
-          version: "v18.0",
+          version: META_API_VERSION,
         });
         setFbReady(true);
       }
@@ -77,12 +87,9 @@ export function MetaEmbeddedSignup({ onSuccess, onError, isLoading }: MetaEmbedd
       window.FB.login(
         (response: FacebookResponse) => {
           if (response.authResponse) {
-            const { code, accessToken } = response.authResponse;
+            const { code } = response.authResponse;
             if (code) {
               onSuccess(code);
-            } else if (accessToken) {
-              // Fallback to access token if code not available
-              onSuccess(accessToken);
             } else {
               const errorMsg = "No authorization code received";
               setError(errorMsg);
@@ -118,29 +125,48 @@ export function MetaEmbeddedSignup({ onSuccess, onError, isLoading }: MetaEmbedd
               <MessageCircle className="h-6 w-6 text-emerald-700" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold">Connect WhatsApp Business</CardTitle>
-              <CardDescription>Link your WhatsApp Business Account in seconds</CardDescription>
+              <CardTitle className="text-2xl font-bold">
+                Connect WhatsApp Business
+              </CardTitle>
+              <CardDescription>
+                Link your WhatsApp Business Account in seconds
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-6 border border-emerald-100">
-            <h3 className="font-semibold text-slate-900 mb-3">What happens next:</h3>
+            <h3 className="font-semibold text-slate-900 mb-3">
+              What happens next:
+            </h3>
             <ol className="space-y-2 text-sm text-slate-700">
               <li className="flex gap-3">
-                <span className="flex-shrink-0 font-semibold text-emerald-700">1.</span>
-                <span>Click the button below to connect your Facebook Business Account</span>
+                <span className="flex-shrink-0 font-semibold text-emerald-700">
+                  1.
+                </span>
+                <span>
+                  Click the button below to connect your Facebook Business
+                  Account
+                </span>
               </li>
               <li className="flex gap-3">
-                <span className="flex-shrink-0 font-semibold text-emerald-700">2.</span>
+                <span className="flex-shrink-0 font-semibold text-emerald-700">
+                  2.
+                </span>
                 <span>Select your business and WhatsApp phone number</span>
               </li>
               <li className="flex gap-3">
-                <span className="flex-shrink-0 font-semibold text-emerald-700">3.</span>
-                <span>We'll automatically configure everything on your behalf</span>
+                <span className="flex-shrink-0 font-semibold text-emerald-700">
+                  3.
+                </span>
+                <span>
+                  We'll automatically configure everything on your behalf
+                </span>
               </li>
               <li className="flex gap-3">
-                <span className="flex-shrink-0 font-semibold text-emerald-700">4.</span>
+                <span className="flex-shrink-0 font-semibold text-emerald-700">
+                  4.
+                </span>
                 <span>Start sending WhatsApp messages immediately</span>
               </li>
             </ol>
@@ -186,7 +212,10 @@ export function MetaEmbeddedSignup({ onSuccess, onError, isLoading }: MetaEmbedd
           </div>
 
           <div className="text-xs text-slate-500 text-center">
-            <p>Your connection is secure and encrypted. We never store your login credentials.</p>
+            <p>
+              Your connection is secure and encrypted. We never store your login
+              credentials.
+            </p>
           </div>
         </CardContent>
       </Card>
